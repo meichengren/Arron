@@ -1,0 +1,31 @@
+# Application-level configuration
+app:
+  name: "Investment Research & Portfolio Quant Decision System"
+  version: "1.0.0"
+  host: "0.0.0.0"
+  port: 8501
+
+database:
+  url: "sqlite:///data/investment.db"
+
+data_source:
+  # primary provider: tushare | akshare
+  primary: "tushare"
+  fallback: "akshare"
+  # failover policy: auto-switch when primary health check fails
+  auto_failover: true
+  request_timeout_seconds: 30
+
+sync:
+  # history window years for market & valuation data
+  market_history_years: 5
+  financial_history_years: 5
+  # financial data freshness threshold in days before warning
+  financial_freshness_days: 120
+  market_freshness_days: 3
+
+seed_symbols:
+  - "600036.SH"
+  - "601318.SH"
+  - "601138.SH"
+  - "601899.SH"

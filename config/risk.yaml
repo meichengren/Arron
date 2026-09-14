@@ -1,0 +1,26 @@
+# Risk engine configuration (Section 19-22)
+benchmark: "000300.SH"
+beta_window: 252
+min_beta_observations: 120
+vol_window: 252
+correlation_short_window: 60
+correlation_long_window: 252
+var_confidence: 0.95
+drawdown_mar: 0.0
+
+# Risk level thresholds (Section 30)
+risk_levels:
+  low:
+    max_beta: 0.85
+    max_vol: 0.18
+    max_single_weight: 0.25
+  moderate:
+    max_beta: 1.05
+    max_vol: 0.22
+  elevated:
+    max_beta: 1.20
+    max_vol: 0.28
+  high:
+    max_industry_weight: 0.50
+  critical:
+    multiple_red_lines: true

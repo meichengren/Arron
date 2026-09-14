@@ -1,0 +1,59 @@
+# Valuation engine configuration (Sections 11-15)
+# All values are defaults; UI may override at the call site.
+horizon_years: 3
+
+# Required annualized returns for the two buy prices
+standard_required_return: 0.12
+conservative_required_return: 0.15
+
+# Scenario probability weights for expected return (Section 15)
+scenario_weights:
+  bear: 0.25
+  base: 0.50
+  bull: 0.25
+
+# Conservative scenario earnings haircut (Section 13: 60%-75% of base growth,
+# exact factor per industry below).
+conservative_growth_range:
+  min: 0.60
+  max: 0.75
+
+# Extra margin of safety for high-volatility industries (Section 13: 5%-10%)
+high_volatility_margin_of_safety: 0.05
+high_volatility_ann_vol: 40.0   # annualized vol % above which MoS applies
+
+# Bear / Bull scenario growth factors relative to base growth (Section 11-14)
+scenario_growth:
+  bear_factor: 0.40
+  bull_factor: 1.50
+  # floor so that bull is never below base + 3pp when base growth is tiny
+  bull_floor_pp: 0.03
+
+# Terminal multiple quantiles inside the 5y historical series
+multiple_quantiles:
+  bear: 0.30
+  base: 0.50
+  bull: 0.75
+
+# Per-industry primary valuation models (Section 14)
+industries:
+  BANK:
+    primary: book_value            # Future BVPS x Target PB
+    cost_of_equity: 0.10
+    retention_ratio_default: 0.65  # used when dividend data is missing
+    gordon_growth_floor: 0.0
+  INSURANCE:
+    primary: ev                    # EV x Target P/EV
+    target_pev: 1.0
+    pe_fallback: true              # EV missing -> PE fallback with a note
+  TECHNOLOGY:
+    primary: pe                    # Future EPS x Target PE
+  CONSUMER:
+    primary: pe
+  MANUFACTURING:
+    primary: pe
+  RESOURCES:
+    primary: normalized_eps        # Normalized EPS x Mid-cycle PE
+    mid_cycle_pe: 12.0
+  GENERIC:
+    primary: pe

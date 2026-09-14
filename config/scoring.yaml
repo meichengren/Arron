@@ -1,0 +1,13 @@
+# Unified research scoring weights (Section 8)
+research:
+  fundamental: 0.30
+  quality: 0.15
+  growth: 0.20
+  valuation: 0.20
+  cycle: 0.10
+  shareholder: 0.05
+
+risk_penalty:
+  max_points: 15
+
+# Industry model weights are defined per model in src/research/models/*.py (Phase 2)

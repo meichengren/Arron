@@ -1,0 +1,27 @@
+# Industry raw keyword -> internal model mapping (Section 7)
+# Resolution order: keyword rules first (case-insensitive contains match),
+# then company-name rules, then GENERIC fallback.
+keyword_rules:
+  - model: BANK
+    keywords: [银行, banking, bank]
+  - model: INSURANCE
+    keywords: [保险, insurance, 人寿, 财险]
+  - model: TECHNOLOGY
+    keywords: [科技, 软件, 半导体, 电子, 通信, 互联网, 计算机, 信息技术,
+                tech, software, semiconductor, electronic, communication, internet, ai, cloud]
+  - model: CONSUMER
+    keywords: [食品, 饮料, 白酒, 家电, 零售, 消费, 医药, 医疗, 汽车,
+                food, beverage, consumer, retail, healthcare, pharma, auto]
+  - model: MANUFACTURING
+    keywords: [制造, 工业, 机械, 装备, 化工, 建材, 钢铁, 纺织,
+                industrial, machinery, equipment, chemical, steel, textile]
+  - model: RESOURCES
+    keywords: [矿业, 有色, 黄金, 铜, 锂, 煤炭, 石油, 能源, 稀土,
+                mining, resources, gold, copper, lithium, coal, oil, energy]
+
+# Explicit symbol overrides always win (highest priority)
+symbol_overrides:
+  "601138.SH": TECHNOLOGY
+  "601899.SH": RESOURCES
+  "600036.SH": BANK
+  "601318.SH": INSURANCE

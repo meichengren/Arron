@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/32185384/README.md)
 ---
 title: 投资投研与组合量化决策系统
 emoji: 📈

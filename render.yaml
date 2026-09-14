@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: investment-dashboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
+    envVars:
+      - key: INVESTMENT_DB_URL
+        value: sqlite:///data/investment.db
+      - key: PYTHONUNBUFFERED
+        value: "1"
