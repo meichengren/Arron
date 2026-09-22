@@ -22,7 +22,7 @@
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true`
 5. 添加环境变量：
-   - `INVESTMENT_DB_URL` = `sqlite:///data/investment.db`
+   - `INVESTMENT_DB_URL` = Neon 提供的 PostgreSQL 连接地址（见 `docs/neon-postgres-setup.md`）
    - `ADMIN_PASSWORD` = 你的管理密码（可选，不设则开放编辑）
 6. 点击 **"Create Web Service"**
 7. 等待构建完成
@@ -30,7 +30,7 @@
 ## 免费计划说明
 
 - **休眠策略**：15 分钟无流量自动休眠，访问时自动唤醒（约 30 秒冷启动）
-- **磁盘**：文件系统持久化，SQLite 数据不会丢失
+- **磁盘**：免费实例的本地文件系统是临时的；重启、重新部署或休眠后 SQLite 数据可能丢失
 - **带宽**：每月 100GB
 - **如果需要不休眠**：可升级 Starter 计划（$7/月）
 
@@ -52,4 +52,4 @@ https://investment-dashboard.onrender.com
 
 ## 数据持久化
 
-SQLite 数据库位于 `data/investment.db`，Render 免费计划的磁盘在重启间持久化，数据不会丢失。
+生产环境请将 `INVESTMENT_DB_URL` 配置为 Neon PostgreSQL。Render 免费实例的本地 SQLite 文件不能作为持久化存储；部署、重启或休眠后文件可能丢失。
