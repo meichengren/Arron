@@ -8,7 +8,6 @@ from sqlalchemy.engine import Engine
 
 from src.db import models
 from src.db.engine import init_database
-from src.db.migrations import migrate
 
 
 def _table_counts(engine: Engine) -> dict[str, int]:
@@ -45,7 +44,7 @@ def copy_sqlite_database(source: Engine, target: Engine) -> dict[str, int]:
         raise ValueError("The migration target must be PostgreSQL.")
 
     # Bring an older SQLite schema up to the current model before reading it.
-    migrate(source)
+    init_database(source)
     init_database(target)
 
     target_counts = _table_counts(target)
