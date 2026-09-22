@@ -16,12 +16,21 @@ from src.config.settings import get_settings
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+def normalize_database_url(db_url: str) -> str:
+    """Return a SQLAlchemy URL with the supported PostgreSQL driver selected."""
+    if db_url.startswith("postgres://"):
+        return "postgresql+psycopg://" + db_url[len("postgres://") :]
+    if db_url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + db_url[len("postgresql://") :]
+    return db_url
+
+
 def make_engine(db_url: str, echo: bool = False) -> Engine:
     """Create an engine. For sqlite relative paths, resolve against project root."""
-    url = db_url
-    if db_url.startswith("sqlite://"):
-        raw_path = db_url[len("sqlite:///") :] if db_url.startswith("sqlite:///") else ""
-        if raw_path == ":memory:" or db_url == "sqlite://":
+    url = normalize_database_url(db_url)
+    if url.startswith("sqlite://"):
+        raw_path = url[len("sqlite:///") :] if url.startswith("sqlite:///") else ""
+        if raw_path == ":memory:" or url == "sqlite://":
             url = "sqlite://"
         else:
             p = Path(raw_path)
