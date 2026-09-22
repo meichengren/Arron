@@ -116,8 +116,17 @@ class AkshareProvider(DataProvider):
     # ------------------------------------------------------------------ #
     def get_stock_basic(self, symbol: str) -> dict[str, Any] | None:
         code = ak_symbol(symbol)
-        name_map = self._get_name_map()
-        if code not in name_map:
+        try:
+            name = self._get_name_map().get(code)
+        except Exception:
+            # The Sina code/name list is occasionally blocked in cloud regions.
+            # Tencent's snapshot is already used by this provider and supplies
+            # the same code-to-name data, so use it as an operation-level fallback.
+            snapshot = self._get_tx_snapshot()
+            row = snapshot[snapshot["code"] == sina_symbol(symbol)]
+            name = None if row.empty else row.iloc[0].get("name")
+
+        if not name:
             return None
         display = code
         exchange = (
@@ -138,7 +147,7 @@ class AkshareProvider(DataProvider):
         return {
             "symbol": symbol,
             "display_symbol": display,
-            "name": _clean_name(name_map.get(code, symbol)),
+            "name": _clean_name(name),
             "exchange": exchange,
             "industry_raw": "",  # sina/tencent endpoints expose no industry; Tushare provides it when configured
             "list_date": list_date,
@@ -414,3 +423,4 @@ def _compute_yoy(periods: pd.Series, values: pd.Series) -> pd.Series:
             except (TypeError, ZeroDivisionError):
                 out.append(None)
     return pd.Series(out, index=periods.index)
+

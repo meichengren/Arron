@@ -37,7 +37,24 @@ sec_id = params.get("security_id", [None])
 try:
     security_id = int(sec_id[0] if isinstance(sec_id, list) else sec_id)
 except (TypeError, ValueError):
-    st.error("缺少有效的 security_id 参数，请从主页进入。")
+    st.title("研究报告")
+    st.warning("请先选择要查看的标的。")
+    rows = svc.library_rows(engine)
+    if rows:
+        choices = {int(row["security_id"]): row for row in rows}
+        selected_id = st.selectbox(
+            "研究标的",
+            options=list(choices),
+            format_func=lambda item: (
+                f'{choices[item]["name"]} · {choices[item]["symbol"]}'
+            ),
+        )
+        if st.button("打开研究报告", type="primary"):
+            st.query_params["security_id"] = str(selected_id)
+            st.rerun()
+    else:
+        st.info("研究标的库为空，请先在「添加标的」页完成同步与分析。")
+    st.page_link("app.py", label="返回主页", icon="🏠")
     st.stop()
 
 payload = svc.detail_payload(engine, security_id)
@@ -224,3 +241,4 @@ if notes:
 
 st.divider()
 st.caption("仅作研究参考，不构成投资建议 · Phase 3 估值: 三情景 DCF/相对估值 + 两档买入价（标准/保守）")
+
