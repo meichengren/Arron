@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config.settings import get_settings  # noqa: E402
-from src.db.engine import get_engine, init_database  # noqa: E402
+from src.db.engine import get_engine, init_database, make_engine  # noqa: E402
 from src.ingestion.financial_sync import FinancialSyncService  # noqa: E402
 from src.ingestion.market_sync import MarketSyncService  # noqa: E402
 from src.ingestion.security_sync import SecuritySyncService  # noqa: E402
@@ -115,6 +115,20 @@ def run_research(symbols: list[str], as_of: date | None = None) -> None:
     print(f"scored={scored}/{len(symbols)}", flush=True)
 
 
+def run_sqlite_to_postgres_migration(source_db_url: str) -> None:
+    """Copy one SQLite database to the configured PostgreSQL database."""
+    from src.db.transfer import copy_sqlite_database
+
+    target = get_engine()
+    source = make_engine(source_db_url)
+    try:
+        counts = copy_sqlite_database(source, target)
+    finally:
+        source.dispose()
+    total = sum(counts.values())
+    print(f"Migration complete: {total} rows copied across {len(counts)} tables.", flush=True)
+
+
 def _fmt(v) -> str:
     return f"{v:.2f}" if v is not None else "n/a"
 
@@ -135,10 +149,18 @@ def main() -> None:
                         help="--model-lab: also export forecast errors to this CSV path")
     parser.add_argument("--horizon", default="12M",
                         help="--model-lab/-export-csv: horizon (3M/6M/12M/24M, default 12M)")
+    parser.add_argument("--migrate-sqlite-to-postgres", action="store_true",
+                        help="copy a SQLite file to the configured PostgreSQL database")
+    parser.add_argument("--source-db-url", default=None,
+                        help="SQLite URL used with --migrate-sqlite-to-postgres")
     args = parser.parse_args()
     as_of = date.fromisoformat(args.as_of) if args.as_of else None
     try:
-        if args.daily:
+        if args.migrate_sqlite_to_postgres:
+            if not args.source_db_url:
+                parser.error("--migrate-sqlite-to-postgres requires --source-db-url")
+            run_sqlite_to_postgres_migration(args.source_db_url)
+        elif args.daily:
             from src.scheduler.daily import run_daily_pipeline
 
             report = run_daily_pipeline(
