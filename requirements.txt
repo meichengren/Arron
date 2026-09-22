@@ -13,3 +13,4 @@ tushare>=1.4
 akshare>=1.14
 APScheduler>=3.10
 python-dotenv>=1.0
+psycopg[binary]>=3.2
