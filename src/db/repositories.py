@@ -8,6 +8,7 @@ from datetime import date
 from typing import Any, Iterable, Sequence
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
@@ -20,18 +21,28 @@ def _session_factory(engine: Engine):
     return make_session_factory(engine)
 
 
+def dialect_insert(engine: Engine, table):
+    """Return the dialect-specific INSERT supporting ON CONFLICT upserts."""
+    if engine.dialect.name == "sqlite":
+        return sqlite_insert(table)
+    if engine.dialect.name == "postgresql":
+        return postgresql_insert(table)
+    raise ValueError(f"Unsupported database dialect for upsert: {engine.dialect.name}")
+
+
 # --------------------------------------------------------------------------- #
 # Securities
 # --------------------------------------------------------------------------- #
 class SecurityRepository:
     def __init__(self, engine: Engine) -> None:
+        self._engine = engine
         self._factory = _session_factory(engine)
 
     def upsert(self, values: dict[str, Any]) -> models.Security:
         """Insert or update a security by unique symbol. Returns the ORM row."""
         with self._factory() as session:
             stmt = (
-                sqlite_insert(models.Security)
+                dialect_insert(self._engine, models.Security)
                 .values(**values)
                 .on_conflict_do_update(
                     index_elements=[models.Security.symbol],
@@ -65,6 +76,7 @@ class SecurityRepository:
 # --------------------------------------------------------------------------- #
 class MarketRepository:
     def __init__(self, engine: Engine) -> None:
+        self._engine = engine
         self._factory = _session_factory(engine)
 
     def upsert_bulk(self, rows: Iterable[dict[str, Any]]) -> int:
@@ -73,7 +85,7 @@ class MarketRepository:
         if not items:
             return 0
         with self._factory() as session:
-            stmt = sqlite_insert(models.DailyMarket).values(items)
+            stmt = dialect_insert(self._engine, models.DailyMarket).values(items)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["security_id", "trade_date"],
                 set_={
@@ -134,6 +146,7 @@ class MarketRepository:
 # --------------------------------------------------------------------------- #
 class FinancialRepository:
     def __init__(self, engine: Engine) -> None:
+        self._engine = engine
         self._factory = _session_factory(engine)
 
     def upsert_bulk(self, rows: Iterable[dict[str, Any]]) -> int:
@@ -141,7 +154,7 @@ class FinancialRepository:
         if not items:
             return 0
         with self._factory() as session:
-            stmt = sqlite_insert(models.FinancialReport).values(items)
+            stmt = dialect_insert(self._engine, models.FinancialReport).values(items)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["security_id", "report_period", "announcement_date"],
                 set_={
@@ -196,6 +209,7 @@ class FinancialRepository:
 # --------------------------------------------------------------------------- #
 class IndustryMetricRepository:
     def __init__(self, engine: Engine) -> None:
+        self._engine = engine
         self._factory = _session_factory(engine)
 
     def upsert_bulk(self, rows: Iterable[dict[str, Any]]) -> int:
@@ -203,7 +217,7 @@ class IndustryMetricRepository:
         if not items:
             return 0
         with self._factory() as session:
-            stmt = sqlite_insert(models.IndustryMetric).values(items)
+            stmt = dialect_insert(self._engine, models.IndustryMetric).values(items)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["security_id", "metric_date", "metric_name"],
                 set_={
