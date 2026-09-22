@@ -46,19 +46,29 @@ class ProviderRouter:
         )
 
     def _call(self, method: str, *args: Any, **kwargs: Any) -> tuple[Any, str]:
-        primary = self._providers.get(self._primary_name)
-        if primary is not None and primary.health_check():
+        """Call primary then fallback; report the actual endpoint failures.
+
+        A provider health probe is deliberately not a gate here. Free-source
+        probes often rely on a different endpoint from the requested operation,
+        so a failed probe must not prevent an otherwise working fallback call.
+        """
+        errors: list[str] = []
+        candidates = (self._primary_name, self._fallback_name)
+
+        for index, name in enumerate(candidates):
+            provider = self._providers.get(name)
+            if provider is None:
+                errors.append(f"{name}: provider not registered")
+                continue
             try:
-                return getattr(primary, method)(*args, **kwargs), primary.name
-            except Exception:
-                if not self.auto_failover:
+                return getattr(provider, method)(*args, **kwargs), provider.name
+            except Exception as exc:
+                errors.append(f"{name}: {type(exc).__name__}: {exc}")
+                if index == 0 and not self.auto_failover:
                     raise
-        fallback = self._providers.get(self._fallback_name)
-        if fallback is None:
-            raise ProviderError(f"fallback provider '{self._fallback_name}' not registered")
-        if not fallback.health_check():
-            raise ProviderError("fallback provider unhealthy")
-        return getattr(fallback, method)(*args, **kwargs), fallback.name
+
+        detail = "; ".join(errors) or "no provider configured"
+        raise ProviderError(f"{method} failed for all configured providers: {detail}")
 
     # ------------------------------------------------------------------ #
     def health_report(self) -> dict[str, bool]:
@@ -79,3 +89,4 @@ class ProviderRouter:
 
     def get_financial_reports(self, symbol: str) -> tuple[Any, str]:
         return self._call("get_financial_reports", symbol)
+
