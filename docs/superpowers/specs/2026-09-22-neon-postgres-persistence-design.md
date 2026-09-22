@@ -9,7 +9,7 @@
 - 保持现有 Streamlit 页面、业务逻辑和数据模型不变。
 - 使用环境变量 `INVESTMENT_DB_URL` 提供 Neon 连接地址；GitHub 不保存数据库密码。
 - 支持现有 SQLite 数据库中已提交的基础数据导入 Neon。
-- 将运行时迁移逻辑从 SQLite 专用实现改为 SQLite 与 PostgreSQL 均可运行。
+- 将运行时迁移逻辑和数据写入层从 SQLite 专用实现改为 SQLite 与 PostgreSQL 均可运行。
 - 更新 Render 部署说明，移除“免费实例 SQLite 会持久保存”的错误描述。
 
 不包含：用户登录、数据备份服务、数据库读写分离或数据源业务逻辑改造。
@@ -39,6 +39,10 @@ python -m src.cli --migrate-sqlite-to-postgres
 
 迁移在 Neon 建库、Render 环境变量配置完成后，从 Render Shell 或可信本地环境执行。连接串只作为环境变量使用，不会写入日志、源码或提交记录。
 
+## 数据写入兼容
+
+当前仓库层直接使用 SQLite 专属的 \`sqlite_insert\`，PostgreSQL 连接会在新增标的或同步数据时失败。抽取按引擎方言选择冲突更新语句的辅助函数：SQLite 使用 \`sqlite_insert\`，PostgreSQL 使用 \`postgresql.insert\`。现有唯一键与更新字段保持不变。
+
 ## 兼容迁移
 
 当前列补丁使用 `PRAGMA table_info`，仅适用于 SQLite。改为 SQLAlchemy Inspector 获取已有列；保留现有的 `ALTER TABLE ... ADD COLUMN` 语句，使其对 SQLite 与 PostgreSQL 均可使用。每项迁移仍保持幂等。
@@ -53,7 +57,7 @@ Render Web Service 的 `INVESTMENT_DB_URL` 改为 Neon 连接串。由于 Neon �
 
 ## 验证
 
-- 单元测试：PostgreSQL URL 规范化、SQLite 与 PostgreSQL 列检查、重复导入保护。
+- 单元测试：PostgreSQL URL 规范化、SQLite 与 PostgreSQL 列检查、SQLite 与 PostgreSQL 的冲突更新语句选择、重复导入保护。
 - 集成测试：使用临时 SQLite 源库验证表创建、导入与行数比对。
 - 部署验证：Render 中打开已有标的、添加一个新标的、重启服务后确认标的与研究快照仍存在。
 - 安全检查：仓库、PR diff 和部署日志中不含 Neon 密码或完整连接串。
