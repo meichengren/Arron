@@ -25,3 +25,17 @@ def test_existing_columns_uses_sqlalchemy_inspector(monkeypatch):
 
     monkeypatch.setattr(migrations, "inspect", lambda engine: Inspector())
     assert migrations._existing_columns(object(), "portfolio_snapshots") == {"id", "risk_level"}
+
+
+def test_transfer_requires_a_postgresql_target():
+    from types import SimpleNamespace
+
+    from src.db.transfer import copy_sqlite_database
+
+    sqlite = SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+    try:
+        copy_sqlite_database(sqlite, sqlite)
+    except ValueError as exc:
+        assert str(exc) == "The migration target must be PostgreSQL."
+    else:
+        raise AssertionError("SQLite targets must be rejected")
