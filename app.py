@@ -81,4 +81,7 @@ with tab_library:
                 )
 
 st.divider()
-st.caption("数据层: SQLite · 行情/财报同步 + 5 档价格状态估值 · 仅作研究参考，不构成投资建议")
+database_label = "PostgreSQL（Neon）" if engine.dialect.name == "postgresql" else "SQLite"
+st.caption(
+    f"数据层: {database_label} · 行情/财报同步 + 5 档价格状态估值 · 仅作研究参考，不构成投资建议"
+)
