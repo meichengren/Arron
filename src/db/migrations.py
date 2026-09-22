@@ -6,7 +6,7 @@ run idempotent ALTER TABLE ... ADD COLUMN for the new columns only.
 """
 from __future__ import annotations
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 # (table, column, ddl_type) - must be nullable or have a default.
@@ -41,9 +41,8 @@ _V12_ADD_COLUMNS: list[tuple[str, str, str]] = [
 
 
 def _existing_columns(engine: Engine, table: str) -> set[str]:
-    with engine.connect() as conn:
-        rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
-        return {r[1] for r in rows}
+    """Return columns using SQLAlchemy's portable schema inspector."""
+    return {column["name"] for column in inspect(engine).get_columns(table)}
 
 
 def migrate(engine: Engine) -> list[str]:
