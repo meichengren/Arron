@@ -74,6 +74,9 @@ class ProviderRouter:
     def health_report(self) -> dict[str, bool]:
         return {name: p.health_check() for name, p in self._providers.items()}
 
+    def lookup_symbol_by_name(self, name: str) -> tuple[str | None, str]:
+        return self._call("lookup_symbol_by_name", name)
+
     def get_stock_basic(self, symbol: str) -> tuple[dict[str, Any] | None, str]:
         return self._call("get_stock_basic", symbol)
 
