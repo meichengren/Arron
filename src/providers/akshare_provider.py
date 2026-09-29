@@ -113,6 +113,27 @@ class AkshareProvider(DataProvider):
         self._tx_snapshot = (now, df)
         return df
 
+    def lookup_symbol_by_name(self, name: str) -> str | None:
+        """Resolve one exact Chinese stock name from Sina, then Tencent fallback."""
+        target = _clean_name(name).strip()
+        if not target:
+            return None
+        try:
+            matches = [
+                code for code, stock_name in self._get_name_map().items()
+                if _clean_name(stock_name).strip() == target
+            ]
+        except Exception:
+            snapshot = self._get_tx_snapshot()
+            names = snapshot["name"].map(lambda value: _clean_name(value).strip())
+            matches = [
+                str(code)[-6:] for code in snapshot.loc[names == target, "code"].tolist()
+            ]
+        unique = sorted(set(matches))
+        if len(unique) > 1:
+            raise ProviderError(f"ambiguous stock name: {target}")
+        return unique[0] if unique else None
+
     # ------------------------------------------------------------------ #
     def get_stock_basic(self, symbol: str) -> dict[str, Any] | None:
         code = ak_symbol(symbol)
