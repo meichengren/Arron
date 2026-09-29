@@ -191,7 +191,14 @@ def refresh_daily_research_scores(
     """Score stored data or synchronize it, optionally restricting work to pending rows."""
     target_date = as_of or date.today()
     from src.config.settings import get_settings
-    sync_config = get_settings().yaml_config.sync
+    from src.providers.provider_router import ProviderRouter
+
+    settings = get_settings()
+    sync_config = settings.yaml_config.sync
+    # Keep a single provider instance for the complete batch. AkShare caches the
+    # market name table and Tencent snapshot on that instance; recreating it for
+    # every symbol turns one refresh into dozens of full-market requests.
+    router = ProviderRouter(settings)
     scorer = ResearchScorer(engine)
     succeeded: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
@@ -206,7 +213,11 @@ def refresh_daily_research_scores(
             try:
                 if sync_data or row["research_score"] is None:
                     result = add_security_and_research(
-                        engine, row["symbol"], target_date, force_sync=sync_data
+                        engine,
+                        row["symbol"],
+                        target_date,
+                        force_sync=sync_data,
+                        router=router,
                     )
                     score = result["research_score"]
                 else:
@@ -554,7 +565,11 @@ def portfolio_decision_payload(
 # Add-security (deployment / web entry, mirrors CLI run_sync + run_research)
 # --------------------------------------------------------------------------- #
 def add_security_and_research(
-    engine: Engine, raw_symbol: str, as_of: date | None = None, force_sync: bool = False
+    engine: Engine,
+    raw_symbol: str,
+    as_of: date | None = None,
+    force_sync: bool = False,
+    router: Any | None = None,
 ) -> dict[str, Any]:
     """同步一个新标的（security -> market -> financial）并立即生成研究评分与
     估值快照（persist=True）。整条链路与 CLI 的 run_sync + run_research 一致。
@@ -570,7 +585,7 @@ def add_security_and_research(
 
     as_of = as_of or date.today()
     settings = get_settings()
-    router = ProviderRouter(settings)
+    router = router or ProviderRouter(settings)
 
     sec_svc = SecuritySyncService(engine, router)
     mkt_svc = MarketSyncService(engine, router)
