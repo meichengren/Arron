@@ -34,7 +34,14 @@ class MarketSyncService:
         end_date: date | None = None,
     ) -> MarketSyncResult:
         today = end_date or date.today()
-        start = today - timedelta(days=int(years * 366) + 30)
+        latest_existing = self._repo.latest_trade_date(security_id)
+        if latest_existing is not None and latest_existing >= today:
+            return MarketSyncResult(security_id, symbol, 0, latest_existing, "cache")
+        start = (
+            latest_existing + timedelta(days=1)
+            if latest_existing is not None
+            else today - timedelta(days=int(years * 366) + 30)
+        )
         start_s = start.strftime("%Y-%m-%d")
         end_s = today.strftime("%Y-%m-%d")
 
