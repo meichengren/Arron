@@ -35,6 +35,15 @@ st.caption("默认自选池已包含 27 个截图标的。刷新后会生成当�
 if imported_default_count:
     st.info(f"已导入 {imported_default_count} 个默认标的；点击“刷新当日积分”即可拉取数据并生成排名。")
 
+last_failures = st.session_state.get("last_score_refresh_failures", [])
+if last_failures:
+    with st.expander(f"⚠️ 上次刷新有 {len(last_failures)} 个标的未完成评分", expanded=True):
+        st.caption("这些标的仍显示“待评分”。可稍后点击“强制同步最新数据”重试。")
+        st.dataframe(last_failures, use_container_width=True, hide_index=True)
+        if st.button("清除失败记录", key="clear_score_refresh_failures"):
+            st.session_state.pop("last_score_refresh_failures", None)
+            st.rerun()
+
 quick_col, sync_col, note_col = st.columns([1, 1.25, 3])
 with quick_col:
     quick_refresh = st.button("⚡ 快速重算积分", type="primary", use_container_width=True)
@@ -54,9 +63,7 @@ if quick_refresh or force_sync:
             st.success(f"已更新 {len(result['succeeded'])} 个标的的当日积分。")
         else:
             st.info("当前没有可更新的标的。")
-        if result["failed"]:
-            st.warning(f"{len(result['failed'])} 个标的未能更新：")
-            st.dataframe(result["failed"], use_container_width=True, hide_index=True)
+        st.session_state["last_score_refresh_failures"] = result["failed"]
         _ranked_rows.clear()
         st.rerun()
 
