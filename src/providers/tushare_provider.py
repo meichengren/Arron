@@ -51,6 +51,23 @@ class TushareProvider(DataProvider):
         except Exception:
             return False
 
+    def lookup_symbol_by_name(self, name: str) -> str | None:
+        """Resolve an exact active A-share name using Tushare's stock master."""
+        target = str(name).strip()
+        if not target:
+            return None
+        pro = self._ensure_client()
+        try:
+            df = pro.stock_basic(exchange="", list_status="L", fields="ts_code,name")
+        except Exception as exc:
+            raise ProviderError(f"stock_basic name lookup failed: {exc}") from exc
+        if df is None or df.empty:
+            return None
+        matches = df[df["name"].astype(str).str.strip() == target]["ts_code"].tolist()
+        if len(matches) > 1:
+            raise ProviderError(f"ambiguous stock name: {target}")
+        return str(matches[0]).split(".")[0] if matches else None
+
     # ------------------------------------------------------------------ #
     def get_stock_basic(self, symbol: str) -> dict[str, Any] | None:
         pro = self._ensure_client()
