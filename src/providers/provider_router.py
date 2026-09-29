@@ -75,7 +75,22 @@ class ProviderRouter:
         return {name: p.health_check() for name, p in self._providers.items()}
 
     def lookup_symbol_by_name(self, name: str) -> tuple[str | None, str]:
-        return self._call("lookup_symbol_by_name", name)
+        """Search each provider until one resolves the exact Chinese name."""
+        errors: list[str] = []
+        for index, provider_name in enumerate((self._primary_name, self._fallback_name)):
+            provider = self._providers.get(provider_name)
+            if provider is None:
+                continue
+            try:
+                code = provider.lookup_symbol_by_name(name)
+            except Exception as exc:
+                errors.append(f"{provider_name}: {type(exc).__name__}: {exc}")
+                if index == 0 and not self.auto_failover:
+                    raise
+                continue
+            if code:
+                return code, provider.name
+        return None, self._fallback_name
 
     def get_stock_basic(self, symbol: str) -> tuple[dict[str, Any] | None, str]:
         return self._call("get_stock_basic", symbol)
