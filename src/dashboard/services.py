@@ -182,25 +182,30 @@ def ranked_research_rows(engine: Engine) -> list[dict[str, Any]]:
 
 
 def refresh_daily_research_scores(
-    engine: Engine, as_of: date | None = None
+    engine: Engine, as_of: date | None = None, sync_data: bool = False
 ) -> dict[str, list[dict[str, Any]]]:
-    """Synchronize and recalculate today's score for every stored security."""
+    """Score stored data quickly, or force a fresh source sync before scoring."""
     target_date = as_of or date.today()
+    scorer = ResearchScorer(engine)
     succeeded: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
     for row in library_rows(engine):
         try:
-            # add_security_and_research is idempotent for an existing symbol.
-            # MarketSyncService only fetches dates missing from the database.
-            result = add_security_and_research(engine, row["symbol"], target_date)
+            if sync_data or row["research_score"] is None:
+                result = add_security_and_research(
+                    engine, row["symbol"], target_date, force_sync=sync_data
+                )
+                score = result["research_score"]
+            else:
+                result = scorer.score_security(
+                    row["security_id"], row["symbol"], row["name"],
+                    row["industry_model"], target_date, persist=True,
+                )
+                score = result.research_score
             succeeded.append(
-                {
-                    "security_id": row["security_id"],
-                    "symbol": row["symbol"],
-                    "research_score": result["research_score"],
-                }
+                {"security_id": row["security_id"], "symbol": row["symbol"], "research_score": score}
             )
-        except Exception as exc:  # noqa: BLE001 - continue refreshing other securities
+        except Exception as exc:  # noqa: BLE001 - keep other symbols available
             failed.append({"symbol": row["symbol"], "error": str(exc)})
     return {"succeeded": succeeded, "failed": failed}
 
@@ -527,7 +532,7 @@ def portfolio_decision_payload(
 # Add-security (deployment / web entry, mirrors CLI run_sync + run_research)
 # --------------------------------------------------------------------------- #
 def add_security_and_research(
-    engine: Engine, raw_symbol: str, as_of: date | None = None
+    engine: Engine, raw_symbol: str, as_of: date | None = None, force_sync: bool = False
 ) -> dict[str, Any]:
     """同步一个新标的（security -> market -> financial）并立即生成研究评分与
     估值快照（persist=True）。整条链路与 CLI 的 run_sync + run_research 一致。
@@ -552,10 +557,10 @@ def add_security_and_research(
     sec_res = sec_svc.sync(raw_symbol)
     sec = sec_res.security
     mkt_res = mkt_svc.sync(
-        sec.id, sec.symbol, years=settings.yaml_config.sync.market_history_years
+        sec.id, sec.symbol, years=settings.yaml_config.sync.market_history_years, force=force_sync
     )
     fin_res = fin_svc.sync(
-        sec.id, sec.symbol, years=settings.yaml_config.sync.financial_history_years
+        sec.id, sec.symbol, years=settings.yaml_config.sync.financial_history_years, force=force_sync
     )
 
     scorer = ResearchScorer(engine)
