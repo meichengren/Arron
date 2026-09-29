@@ -38,3 +38,16 @@ def test_normalize_a_share_symbol_resolves_chinese_name_through_lookup():
 def test_normalize_a_share_symbol_rejects_invalid_or_mismatched_exchange(raw):
     with pytest.raises(ValueError):
         normalize_a_share_symbol(raw)
+
+
+def test_akshare_name_lookup_returns_a_unique_stock_code(monkeypatch):
+    from src.providers.akshare_provider import AkshareProvider
+
+    provider = AkshareProvider()
+    monkeypatch.setattr(
+        provider,
+        "_get_name_map",
+        lambda: {"600036": "招商银行", "000001": "平安银行"},
+    )
+
+    assert provider.lookup_symbol_by_name(" 招商银行 ") == "600036"
