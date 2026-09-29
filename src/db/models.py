@@ -25,6 +25,19 @@ class Base(DeclarativeBase):
     pass
 
 
+class SystemState(Base):
+    """One-time application flags persisted with the rest of the database."""
+
+    __tablename__ = "system_state"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now, onupdate=datetime.now
+    )
+
+
 class Security(Base):
     __tablename__ = "securities"
 
