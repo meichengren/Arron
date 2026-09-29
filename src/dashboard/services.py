@@ -63,7 +63,9 @@ def library_rows(engine: Engine) -> list[dict[str, Any]]:
             select(models.Security).order_by(models.Security.symbol)
         ).scalars().all()
         snaps = session.execute(
-            select(models.ResearchSnapshot).order_by(models.ResearchSnapshot.as_of_date)
+            select(models.ResearchSnapshot).order_by(
+                models.ResearchSnapshot.as_of_date, models.ResearchSnapshot.created_at
+            )
         ).scalars().all()
     latest: dict[int, models.ResearchSnapshot] = {}
     for s in snaps:
@@ -100,6 +102,62 @@ def library_rows(engine: Engine) -> list[dict[str, Any]]:
             )
         out.append(row)
     return out
+
+
+
+def ranked_research_rows(engine: Engine) -> list[dict[str, Any]]:
+    """Return the current research library ordered by composite score descending."""
+    rows = library_rows(engine)
+    return sorted(
+        rows,
+        key=lambda row: (
+            row["research_score"] is not None,
+            row["research_score"] if row["research_score"] is not None else float("-inf"),
+        ),
+        reverse=True,
+    )
+
+
+def refresh_daily_research_scores(
+    engine: Engine, as_of: date | None = None
+) -> dict[str, list[dict[str, Any]]]:
+    """Recalculate today's composite score for every stored security."""
+    target_date = as_of or date.today()
+    scorer = ResearchScorer(engine)
+    succeeded: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for row in library_rows(engine):
+        try:
+            result = scorer.score_security(
+                row["security_id"],
+                row["symbol"],
+                row["name"],
+                row["industry_model"],
+                target_date,
+                persist=True,
+            )
+            succeeded.append(
+                {
+                    "security_id": row["security_id"],
+                    "symbol": row["symbol"],
+                    "research_score": result.research_score,
+                }
+            )
+        except Exception as exc:  # noqa: BLE001 - continue refreshing other securities
+            failed.append({"symbol": row["symbol"], "error": str(exc)})
+    return {"succeeded": succeeded, "failed": failed}
+
+
+def delete_security(engine: Engine, security_id: int) -> bool:
+    """Delete one security and all rows linked through its database foreign keys."""
+    factory = make_session_factory(engine)
+    with factory() as session:
+        security = session.get(models.Security, security_id)
+        if security is None:
+            return False
+        session.delete(security)
+        session.commit()
+    return True
 
 
 def get_security(engine: Engine, security_id: int) -> dict[str, Any] | None:
