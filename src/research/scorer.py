@@ -227,7 +227,12 @@ class ResearchScorer:
             for key in DIMENSIONS
         )
         research_score = compute_research_score(dimensions, risk_score, self._weights, self._penalty)
-        age_days = (as_of - ordered[-1][0]).days
+        age_days = max(0, (as_of - ordered[-1][0]).days)
+        freshness_score = max(0.0, 100.0 - age_days * 20.0)
+        # ETF confidence measures usable market-history coverage and price freshness.
+        # It intentionally does not penalize ETFs for missing company financial reports.
+        history_coverage = min(1.0, len(ordered) / 60.0)
+        confidence_score = round(min(90.0, 35.0 + history_coverage * 35.0 + freshness_score * 0.20), 1)
         return ResearchResult(
             security_id=security_id,
             symbol=symbol,
@@ -239,10 +244,16 @@ class ResearchScorer:
             risk_components=(RiskComponent("volatility", "行情波动", risk_score, 1.0),),
             risk_score=risk_score,
             research_score=research_score,
-            confidence_score=0.45,
-            data_freshness_score=max(0.0, 100.0 - max(0, age_days) * 20.0),
+            confidence_score=confidence_score,
+            data_freshness_score=freshness_score,
             risk_flags=("ETF 不使用公司财报评分",),
-            extra={"close": closes[-1], "momentum_60d": momentum, "volatility": volatility},
+            extra={
+                "close": closes[-1],
+                "momentum_60d": momentum,
+                "volatility": volatility,
+                "market_history_days": len(ordered),
+                "market_age_days": age_days,
+            },
             valuation=None,
         )
 

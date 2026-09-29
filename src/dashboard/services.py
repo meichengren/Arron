@@ -190,6 +190,8 @@ def refresh_daily_research_scores(
 ) -> dict[str, list[dict[str, Any]]]:
     """Score stored data or synchronize it, optionally restricting work to pending rows."""
     target_date = as_of or date.today()
+    from src.config.settings import get_settings
+    sync_config = get_settings().yaml_config.sync
     scorer = ResearchScorer(engine)
     succeeded: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
@@ -198,7 +200,7 @@ def refresh_daily_research_scores(
         rows = [row for row in rows if row["research_score"] is None]
 
     for index, row in enumerate(rows):
-        attempts = 3 if sync_data else 1
+        attempts = sync_config.retry_attempts if sync_data else 1
         last_error: Exception | None = None
         for attempt in range(attempts):
             try:
@@ -221,11 +223,11 @@ def refresh_daily_research_scores(
             except Exception as exc:  # noqa: BLE001 - preserve the final source error
                 last_error = exc
                 if attempt < attempts - 1:
-                    time.sleep(1.0 * (attempt + 1))
+                    time.sleep(sync_config.retry_backoff_seconds * (attempt + 1))
         if last_error is not None:
             failed.append({"symbol": row["symbol"], "error": str(last_error)})
         if sync_data and index < len(rows) - 1:
-            time.sleep(0.35)
+            time.sleep(sync_config.request_interval_seconds)
 
     return {"succeeded": succeeded, "failed": failed}
 

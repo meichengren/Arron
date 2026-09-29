@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta
 
 import pandas as pd
 
+from src.config.settings import get_settings
 from src.db.engine import Engine
 from src.db.repositories import FinancialRepository
 from src.providers.provider_router import ProviderRouter
@@ -46,7 +47,7 @@ class FinancialSyncService:
             not force
             and latest is not None
             and latest.fetched_at is not None
-            and (today - latest.fetched_at.date()).days < 7
+            and (today - latest.fetched_at.date()).days < get_settings().yaml_config.sync.financial_cache_days
         ):
             return FinancialSyncResult(
                 security_id, symbol, 0, latest.report_period, "cache"

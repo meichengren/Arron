@@ -34,6 +34,11 @@ class DataSourceConfig(BaseModel):
 class SyncConfig(BaseModel):
     market_history_years: int = 5
     financial_history_years: int = 5
+    financial_cache_days: int = 7
+    retry_attempts: int = 3
+    retry_backoff_seconds: float = 1.0
+    request_interval_seconds: float = 0.35
+    dashboard_cache_seconds: int = 30
     financial_freshness_days: int = 120
     market_freshness_days: int = 3
 

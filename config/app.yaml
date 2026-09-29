@@ -9,17 +9,25 @@ database:
   url: "sqlite:///data/investment.db"
 
 data_source:
-  # primary provider: tushare | akshare
-  primary: "tushare"
-  fallback: "akshare"
-  # failover policy: auto-switch when primary health check fails
+  # Free-source first: avoids an unavailable Tushare token adding latency.
+  primary: "akshare"
+  fallback: "tushare"
+  # failover policy: try the fallback immediately after a source error.
   auto_failover: true
-  request_timeout_seconds: 30
+  request_timeout_seconds: 15
 
 sync:
-  # history window years for market & valuation data
+  # Keep sufficient history for valuation and risk calculations.
   market_history_years: 5
   financial_history_years: 5
+  # Cache reports between disclosure periods; manual force-sync bypasses this.
+  financial_cache_days: 7
+  # Retry only failed/pending symbols without overwhelming free endpoints.
+  retry_attempts: 3
+  retry_backoff_seconds: 1.0
+  request_interval_seconds: 0.35
+  # UI list cache; cleared immediately after a refresh or deletion.
+  dashboard_cache_seconds: 30
   # financial data freshness threshold in days before warning
   financial_freshness_days: 120
   market_freshness_days: 3
