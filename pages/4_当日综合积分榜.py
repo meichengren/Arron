@@ -35,16 +35,21 @@ st.caption("默认自选池已包含 27 个截图标的。刷新后会生成当�
 if imported_default_count:
     st.info(f"已导入 {imported_default_count} 个默认标的；点击“刷新当日积分”即可拉取数据并生成排名。")
 
-left, right = st.columns([1, 4])
-with left:
-    refresh = st.button("🔄 刷新当日积分", type="primary", use_container_width=True)
-with right:
-    st.caption(f"评分日期：{date.today().isoformat()}。刷新会为所有已添加标的生成最新评分；单个标的失败不会中断其余标的。")
+quick_col, sync_col, note_col = st.columns([1, 1.25, 3])
+with quick_col:
+    quick_refresh = st.button("⚡ 快速重算积分", type="primary", use_container_width=True)
+with sync_col:
+    force_sync = st.button("🔄 强制同步最新数据", use_container_width=True)
+with note_col:
+    st.caption(
+        f"评分日期：{date.today().isoformat()}。快速重算只读取已保存数据；强制同步会绕过 7 天财报缓存并更新最新行情，再评分。"
+    )
 
-if refresh:
+if quick_refresh or force_sync:
     if admin_required("daily_scoreboard_refresh"):
-        with st.spinner("正在刷新当日综合积分…"):
-            result = svc.refresh_daily_research_scores(engine)
+        label = "正在同步最新数据并评分…" if force_sync else "正在使用本地数据重算积分…"
+        with st.spinner(label):
+            result = svc.refresh_daily_research_scores(engine, sync_data=force_sync)
         if result["succeeded"]:
             st.success(f"已更新 {len(result['succeeded'])} 个标的的当日积分。")
         else:
