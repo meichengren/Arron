@@ -13,6 +13,7 @@ Pipeline per security & as-of date:
 from __future__ import annotations
 
 from datetime import date
+from statistics import pstdev
 
 from sqlalchemy import delete, select
 from sqlalchemy.engine import Engine
@@ -129,6 +130,14 @@ class ResearchScorer:
         persist: bool = True,
         model: IndustryScoringModel | None = None,
     ) -> ResearchResult:
+        with Session(self._engine) as session:
+            security = session.get(models.Security, security_id)
+        if security is not None and security.market == "CN_ETF":
+            result = self._score_etf(security_id, symbol, name, as_of)
+            if persist:
+                self.persist(result)
+            return result
+
         dp = build_data_points(self._engine, security_id, symbol, name, industry_model, as_of)
 
         m = model or get_model(industry_model)
@@ -187,6 +196,55 @@ class ResearchScorer:
         if persist:
             self.persist(result)
         return result
+
+    def _score_etf(
+        self, security_id: int, symbol: str, name: str, as_of: date
+    ) -> ResearchResult:
+        """Score an ETF from tradable market data without inventing company reports."""
+        with Session(self._engine) as session:
+            rows = session.execute(
+                select(models.DailyMarket.trade_date, models.DailyMarket.close)
+                .where(models.DailyMarket.security_id == security_id)
+                .order_by(models.DailyMarket.trade_date.desc())
+                .limit(61)
+            ).all()
+        ordered = list(reversed([(trade_date, float(close)) for trade_date, close in rows if close]))
+        if len(ordered) < 2:
+            raise ValueError(f"ETF {symbol} 缺少可评分的行情数据")
+        closes = [close for _day, close in ordered]
+        returns = [closes[index] / closes[index - 1] - 1 for index in range(1, len(closes))]
+        momentum = closes[-1] / closes[0] - 1
+        volatility = pstdev(returns) if len(returns) > 1 else 0.0
+        risk_score = round(min(100.0, max(0.0, volatility * 1500)), 2)
+        market_score = min(100.0, max(0.0, 50.0 + momentum * 250))
+        dimensions = tuple(
+            DimensionScore(
+                key=key,
+                label=key,
+                score=market_score if key in ("valuation", "cycle") else 50.0,
+                missing_keys=("financial_reports",) if key in ("fundamental", "quality", "growth", "shareholder") else (),
+            )
+            for key in DIMENSIONS
+        )
+        research_score = compute_research_score(dimensions, risk_score, self._weights, self._penalty)
+        age_days = (as_of - ordered[-1][0]).days
+        return ResearchResult(
+            security_id=security_id,
+            symbol=symbol,
+            name=name,
+            industry_model="ETF",
+            as_of_date=as_of,
+            model_version="ETF-V1",
+            dimensions=dimensions,
+            risk_components=(RiskComponent("volatility", "行情波动", risk_score, 1.0),),
+            risk_score=risk_score,
+            research_score=research_score,
+            confidence_score=0.45,
+            data_freshness_score=max(0.0, 100.0 - max(0, age_days) * 20.0),
+            risk_flags=("ETF 不使用公司财报评分",),
+            extra={"close": closes[-1], "momentum_60d": momentum, "volatility": volatility},
+            valuation=None,
+        )
 
     def persist(self, result: ResearchResult) -> None:
         """Idempotent upsert: replace the snapshot for (security_id, as_of_date)."""
