@@ -319,6 +319,8 @@ class AkshareProvider(DataProvider):
         sina layout (akshare >= 1.18): rows = report periods, columns = metrics,
         includes an '公告日期' column -> announcement_date is real, look-ahead safe.
         """
+        if _is_etf_symbol(symbol):
+            return pd.DataFrame()
         import akshare as ak
 
         stock = sina_symbol(symbol)
