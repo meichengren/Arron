@@ -68,21 +68,35 @@ if last_failures:
             st.session_state.pop("last_score_refresh_failures", None)
             st.rerun()
 
-quick_col, sync_col, note_col = st.columns([1, 1.25, 3])
+pending_count = sum(row["research_score"] is None for row in _ranked_rows())
+quick_col, retry_col, sync_col, note_col = st.columns([1, 1.35, 1.25, 2.4])
 with quick_col:
     quick_refresh = st.button("⚡ 快速重算积分", type="primary", use_container_width=True)
+with retry_col:
+    retry_pending = st.button(
+        f"🩹 补全待评分（{pending_count}）",
+        disabled=pending_count == 0,
+        use_container_width=True,
+    )
 with sync_col:
     force_sync = st.button("🔄 强制同步最新数据", use_container_width=True)
 with note_col:
     st.caption(
-        f"评分日期：{date.today().isoformat()}。快速重算只读取已保存数据；强制同步会绕过 7 天财报缓存并更新最新行情，再评分。"
+        f"评分日期：{date.today().isoformat()}。补全待评分会逐只重试并节流；强制同步会绕过 7 天财报缓存并更新最新行情。"
     )
 
-if quick_refresh or force_sync:
+if quick_refresh or retry_pending or force_sync:
     if admin_required("daily_scoreboard_refresh"):
-        label = "正在同步最新数据并评分…" if force_sync else "正在使用本地数据重算积分…"
+        if retry_pending:
+            label = "正在补全待评分标的（免费数据源会逐只重试）…"
+        elif force_sync:
+            label = "正在同步最新数据并评分…"
+        else:
+            label = "正在使用本地数据重算积分…"
         with st.spinner(label):
-            result = svc.refresh_daily_research_scores(engine, sync_data=force_sync)
+            result = svc.refresh_daily_research_scores(
+                engine, sync_data=force_sync or retry_pending, only_pending=retry_pending
+            )
         if result["succeeded"]:
             st.success(f"已更新 {len(result['succeeded'])} 个标的的当日积分。")
         else:
