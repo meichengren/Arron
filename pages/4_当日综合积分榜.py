@@ -52,7 +52,7 @@ if not rows:
 
 st.caption(f"共 {len(rows)} 个标的；“查看”可打开研究详情，“删除”会移除该标的及其关联的研究和风险记录。")
 headers = st.columns([0.55, 2.2, 1.45, 1.2, 1.2, 1.7, 1.8])
-for column, title in zip(headers, ["排名", "标的", "综合积分", "风险等级", "置信度", "最近评分", "操作"]):
+for column, title in zip(headers, ["排名", "标的", "综合积分", "风险评分", "置信度", "最近评分", "操作"]):
     column.markdown(f"**{title}**")
 
 for rank, row in enumerate(rows, start=1):
@@ -61,10 +61,11 @@ for rank, row in enumerate(rows, start=1):
     columns[1].write(f"{row['name']} · {row['symbol']}")
     score = row["research_score"]
     columns[2].write(f"{score:.1f}" if score is not None else "待评分")
-    columns[3].write(row["risk_level"] or "—")
-    confidence = row["confidence"]
+    risk_score = row["risk_score"]
+    columns[3].write(f"{risk_score:.1f}" if risk_score is not None else "—")
+    confidence = row["confidence_score"]
     columns[4].write(f"{confidence:.0%}" if confidence is not None else "—")
-    columns[5].write(str(row["snapshot_date"] or "—"))
+    columns[5].write(str(row["as_of_date"] or "—"))
 
     security_id = row["security_id"]
     confirm_key = f"confirm_delete_scoreboard_{security_id}"
@@ -87,7 +88,6 @@ for rank, row in enumerate(rows, start=1):
         detail.page_link(
             "pages/1_Research_Detail.py",
             label="查看",
-            query_params={"security_id": str(security_id)},
         )
         if remove.button("删除", key=f"request_delete_{security_id}"):
             st.session_state[confirm_key] = True
