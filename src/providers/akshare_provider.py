@@ -54,6 +54,11 @@ def ak_symbol(symbol: str) -> str:
     return symbol.split(".")[0]
 
 
+
+def _is_etf_symbol(symbol: str) -> bool:
+    return symbol.split(".")[0].startswith(("510", "511", "512", "513", "515", "518", "588", "159"))
+
+
 def _clean_name(name: str) -> str:
     """Strip XD/XR/DR ex-right markers leaked into stock names."""
     cleaned = str(name).strip()
@@ -136,6 +141,8 @@ class AkshareProvider(DataProvider):
 
     # ------------------------------------------------------------------ #
     def get_stock_basic(self, symbol: str) -> dict[str, Any] | None:
+        if _is_etf_symbol(symbol):
+            return self._get_etf_basic(symbol)
         code = ak_symbol(symbol)
         try:
             name = self._get_name_map().get(code)
@@ -175,10 +182,53 @@ class AkshareProvider(DataProvider):
             "status": "ACTIVE",
         }
 
+    def _get_etf_basic(self, symbol: str) -> dict[str, Any] | None:
+        import akshare as ak
+        try:
+            frame = ak.fund_etf_spot_em()
+        except Exception as exc:
+            raise ProviderError(f"AKShare ETF spot failed: {exc}") from exc
+        code = ak_symbol(symbol)
+        code_col = next((col for col in frame.columns if str(col) in ("代码", "基金代码")), None)
+        name_col = next((col for col in frame.columns if str(col) in ("名称", "基金名称")), None)
+        if not code_col or not name_col:
+            raise ProviderError("AKShare ETF spot columns changed")
+        matched = frame[frame[code_col].astype(str).str.zfill(6) == code]
+        if matched.empty:
+            return None
+        return {
+            "symbol": symbol, "display_symbol": code, "name": str(matched.iloc[0][name_col]).strip(),
+            "exchange": "SSE" if code.startswith("5") else "SZSE",
+            "industry_raw": "ETF", "list_date": None, "status": "ACTIVE",
+        }
+
+    def _get_etf_daily_bars(self, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+        import akshare as ak
+        try:
+            frame = ak.fund_etf_hist_em(symbol=ak_symbol(symbol), period="daily",
+                start_date=start_date.replace("-", ""), end_date=end_date.replace("-", ""), adjust="")
+        except Exception as exc:
+            raise ProviderError(f"AKShare ETF history failed: {exc}") from exc
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        out = frame.rename(columns={"日期": "trade_date", "开盘": "open", "最高": "high", "最低": "low",
+            "收盘": "close", "成交量": "volume", "成交额": "amount", "涨跌幅": "pct_change"})
+        if "trade_date" not in out or "close" not in out:
+            raise ProviderError("AKShare ETF history columns changed")
+        out["trade_date"] = pd.to_datetime(out["trade_date"], errors="coerce").dt.date
+        for field in ("open", "high", "low", "close", "volume", "amount", "pct_change"):
+            if field in out:
+                out[field] = pd.to_numeric(out[field], errors="coerce")
+        out = out.dropna(subset=["trade_date", "close"]).sort_values("trade_date")
+        out["pre_close"] = out["close"].shift(1)
+        return out[[field for field in ("trade_date", "open", "high", "low", "close", "pre_close", "pct_change", "volume", "amount") if field in out]].reset_index(drop=True)
+
     # ------------------------------------------------------------------ #
     def get_daily_bars(
         self, symbol: str, start_date: str, end_date: str
     ) -> pd.DataFrame:
+        if _is_etf_symbol(symbol):
+            return self._get_etf_daily_bars(symbol, start_date, end_date)
         import akshare as ak
 
         stock = sina_symbol(symbol)
@@ -230,6 +280,8 @@ class AkshareProvider(DataProvider):
         trading day row. Tushare provides the full history when configured.
         """
         bars = self.get_daily_bars(symbol, start_date, end_date)
+        if _is_etf_symbol(symbol):
+            return pd.DataFrame({"trade_date": bars["trade_date"]}) if bars is not None and not bars.empty else pd.DataFrame()
         if bars is None or bars.empty:
             return pd.DataFrame()
         snapshot = self._get_tx_snapshot()
@@ -267,6 +319,8 @@ class AkshareProvider(DataProvider):
         sina layout (akshare >= 1.18): rows = report periods, columns = metrics,
         includes an '公告日期' column -> announcement_date is real, look-ahead safe.
         """
+        if _is_etf_symbol(symbol):
+            return pd.DataFrame()
         import akshare as ak
 
         stock = sina_symbol(symbol)

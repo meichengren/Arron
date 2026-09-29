@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from src.config.settings import AppSettings
 from src.providers.akshare_provider import AkshareProvider
+from src.providers.eastmoney_etf_provider import EastmoneyEtfProvider
 from src.providers.base import DataProvider, ProviderError
 from src.providers.tushare_provider import TushareProvider
 
@@ -23,6 +24,7 @@ class ProviderRouter:
         self._providers: dict[str, DataProvider] = providers or {
             "tushare": TushareProvider(settings),
             "akshare": AkshareProvider(settings),
+            "eastmoney_etf": EastmoneyEtfProvider(),
         }
         ds = settings.yaml_config.data_source
         self.auto_failover = ds.auto_failover
@@ -45,6 +47,12 @@ class ProviderRouter:
             f"fallback={self._fallback_name})"
         )
 
+    def _candidate_names(self, symbol: str | None = None) -> tuple[str, ...]:
+        code = (symbol or "").split(".")[0]
+        if code.startswith(("510", "511", "512", "513", "515", "518", "588", "159")):
+            return ("eastmoney_etf", "akshare")
+        return (self._primary_name, self._fallback_name)
+
     def _call(self, method: str, *args: Any, **kwargs: Any) -> tuple[Any, str]:
         """Call primary then fallback; report the actual endpoint failures.
 
@@ -53,7 +61,7 @@ class ProviderRouter:
         so a failed probe must not prevent an otherwise working fallback call.
         """
         errors: list[str] = []
-        candidates = (self._primary_name, self._fallback_name)
+        candidates = self._candidate_names(str(args[0]) if args else None)
 
         for index, name in enumerate(candidates):
             provider = self._providers.get(name)

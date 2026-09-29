@@ -19,13 +19,13 @@ engine = get_engine()
 init_database(engine)
 
 st.title("➕ 添加新标的")
-st.caption("输入 A 股代码：系统将从免费数据源同步历史行情与财报，立即生成研究评分、估值与买入价。此操作会写入数据库，需管理权限。")
+st.caption("输入 A 股或国内场内 ETF 代码：系统会优先使用免费数据源同步历史行情；ETF 不要求公司财报。此操作会写入数据库，需管理权限。")
 
 # ---- 写操作守卫：未配置 ADMIN_PASSWORD 时直接放行 ------------------------ #
 if not admin_required("add_security"):
     st.stop()
 
-symbol = st.text_input("股票代码", placeholder="例如：600036 / 601318.SH / 601899 / 000001")
+symbol = st.text_input("证券代码", placeholder="例如：600036 / 601318.SH / 510300 / 159915.ETF")
 as_of = st.date_input("分析基准日", value=date.today())
 
 if st.button("🚀 同步并分析", type="primary", disabled=not symbol.strip()):

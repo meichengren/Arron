@@ -37,6 +37,8 @@ class FinancialSyncService:
         years: int = 5,
         end_date: date | None = None,
     ) -> FinancialSyncResult:
+        if symbol.split(".")[0].startswith(("510", "511", "512", "513", "515", "518", "588", "159")):
+            return FinancialSyncResult(security_id, symbol, 0, None, "not_applicable")
         df, source = self._router.get_financial_reports(symbol)
         today = end_date or date.today()
         cutoff = date(today.year - years, today.month, today.day)

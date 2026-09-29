@@ -23,6 +23,68 @@ from src.valuation.zones import valuation_zones
 # --------------------------------------------------------------------------- #
 # Search / Library
 # --------------------------------------------------------------------------- #
+
+DEFAULT_WATCHLIST: tuple[tuple[str, str, str], ...] = (
+    ("600406.SH", "国电南瑞", "SSE"),
+    ("002050.SZ", "三花智控", "SZSE"),
+    ("003816.SZ", "中国广核", "SZSE"),
+    ("000333.SZ", "美的集团", "SZSE"),
+    ("600276.SH", "恒瑞医药", "SSE"),
+    ("600660.SH", "福耀玻璃", "SSE"),
+    ("600036.SH", "招商银行", "SSE"),
+    ("600900.SH", "长江电力", "SSE"),
+    ("300308.SZ", "中际旭创", "SZSE"),
+    ("002821.SZ", "凯莱英", "SZSE"),
+    ("600809.SH", "山西汾酒", "SSE"),
+    ("600941.SH", "中国移动", "SSE"),
+    ("601985.SH", "中国核电", "SSE"),
+    ("601628.SH", "中国人寿", "SSE"),
+    ("000792.SZ", "盐湖股份", "SZSE"),
+    ("600845.SH", "宝信软件", "SSE"),
+    ("601138.SH", "工业富联", "SSE"),
+    ("300750.SZ", "宁德时代", "SZSE"),
+    ("300124.SZ", "汇川技术", "SZSE"),
+    ("600150.SH", "中国船舶", "SSE"),
+    ("601318.SH", "中国平安", "SSE"),
+    ("600519.SH", "贵州茅台", "SSE"),
+    ("601088.SH", "中国神华", "SSE"),
+    ("002594.SZ", "比亚迪", "SZSE"),
+    ("601899.SH", "紫金矿业", "SSE"),
+    ("002371.SZ", "北方华创", "SZSE"),
+    ("601398.SH", "工商银行", "SSE"),
+)
+
+
+def seed_default_watchlist(engine: Engine) -> int:
+    """Import the initial screenshot watchlist once, without restoring deletions."""
+    factory = make_session_factory(engine)
+    with factory() as session:
+        if session.get(models.SystemState, "default_watchlist_v1") is not None:
+            return 0
+        existing = {
+            symbol
+            for symbol in session.execute(select(models.Security.symbol)).scalars()
+        }
+        imported = 0
+        for symbol, name, exchange in DEFAULT_WATCHLIST:
+            if symbol in existing:
+                continue
+            session.add(
+                models.Security(
+                    symbol=symbol,
+                    display_symbol=symbol.split(".")[0],
+                    name=name,
+                    exchange=exchange,
+                    market="CN_A",
+                    industry_model="GENERIC",
+                )
+            )
+            imported += 1
+        session.add(models.SystemState(key="default_watchlist_v1", value="imported"))
+        session.commit()
+    return imported
+
+
 def search_securities(engine: Engine, query: str, limit: int = 20) -> list[dict[str, Any]]:
     """Search by symbol / display symbol / name (case-insensitive substring)."""
     q = query.strip()
@@ -78,6 +140,7 @@ def library_rows(engine: Engine) -> list[dict[str, Any]]:
             "display": sec.display_symbol,
             "name": sec.name,
             "industry_model": sec.industry_model,
+            "asset_type": "ETF" if sec.market == "CN_ETF" else "A股",
             "research_score": None,
             "risk_score": None,
             "confidence_score": None,
@@ -121,32 +184,25 @@ def ranked_research_rows(engine: Engine) -> list[dict[str, Any]]:
 def refresh_daily_research_scores(
     engine: Engine, as_of: date | None = None
 ) -> dict[str, list[dict[str, Any]]]:
-    """Recalculate today's composite score for every stored security."""
+    """Synchronize and recalculate today's score for every stored security."""
     target_date = as_of or date.today()
-    scorer = ResearchScorer(engine)
     succeeded: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
     for row in library_rows(engine):
         try:
-            result = scorer.score_security(
-                row["security_id"],
-                row["symbol"],
-                row["name"],
-                row["industry_model"],
-                target_date,
-                persist=True,
-            )
+            # add_security_and_research is idempotent for an existing symbol.
+            # MarketSyncService only fetches dates missing from the database.
+            result = add_security_and_research(engine, row["symbol"], target_date)
             succeeded.append(
                 {
                     "security_id": row["security_id"],
                     "symbol": row["symbol"],
-                    "research_score": result.research_score,
+                    "research_score": result["research_score"],
                 }
             )
         except Exception as exc:  # noqa: BLE001 - continue refreshing other securities
             failed.append({"symbol": row["symbol"], "error": str(exc)})
     return {"succeeded": succeeded, "failed": failed}
-
 
 def delete_security(engine: Engine, security_id: int) -> bool:
     """Delete one security and all rows linked through its database foreign keys."""
