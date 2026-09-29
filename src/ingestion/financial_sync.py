@@ -36,11 +36,22 @@ class FinancialSyncService:
         symbol: str,
         years: int = 5,
         end_date: date | None = None,
+        force: bool = False,
     ) -> FinancialSyncResult:
         if symbol.split(".")[0].startswith(("510", "511", "512", "513", "515", "518", "588", "159")):
             return FinancialSyncResult(security_id, symbol, 0, None, "not_applicable")
-        df, source = self._router.get_financial_reports(symbol)
         today = end_date or date.today()
+        latest = self._repo.latest_announcement(security_id)
+        if (
+            not force
+            and latest is not None
+            and latest.fetched_at is not None
+            and (today - latest.fetched_at.date()).days < 7
+        ):
+            return FinancialSyncResult(
+                security_id, symbol, 0, latest.report_period, "cache"
+            )
+        df, source = self._router.get_financial_reports(symbol)
         cutoff = date(today.year - years, today.month, today.day)
         if df is None or df.empty:
             return FinancialSyncResult(security_id, symbol, 0, None, source)
