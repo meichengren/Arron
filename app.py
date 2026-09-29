@@ -66,7 +66,7 @@ with tab_library:
                 if r["research_score"] is not None:
                     bits.append(f"Research **{r['research_score']:.1f}**")
                 if r["confidence_score"] is not None:
-                    bits.append(f"Confidence **{r['confidence_score']:.0f}%**")
+                    bits.append(f"Confidence **{r['confidence_score']:.0f}/100**")
                 if r["price_state"]:
                     bits.append(f"价格状态 **{r['price_state']}**")
                 if r["fair_value_base"] is not None:
