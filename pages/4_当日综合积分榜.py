@@ -6,6 +6,7 @@ from datetime import date
 
 import streamlit as st
 
+from src.config.settings import get_settings
 from src.dashboard import services as svc
 from src.db.engine import get_engine, init_database
 from src.ui.auth import admin_required
@@ -23,9 +24,10 @@ def _engine():
 
 engine = _engine()
 imported_default_count = svc.seed_default_watchlist(engine)
+DASHBOARD_CACHE_SECONDS = get_settings().yaml_config.sync.dashboard_cache_seconds
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=DASHBOARD_CACHE_SECONDS, show_spinner=False)
 def _ranked_rows():
     return svc.ranked_research_rows(engine)
 
