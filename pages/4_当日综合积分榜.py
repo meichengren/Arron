@@ -35,6 +35,28 @@ st.caption("默认自选池已包含 27 个截图标的。刷新后会生成当�
 if imported_default_count:
     st.info(f"已导入 {imported_default_count} 个默认标的；点击“刷新当日积分”即可拉取数据并生成排名。")
 
+with st.expander("📘 评分与数据置信度规则", expanded=True):
+    score_rule, confidence_rule = st.columns(2)
+    with score_rule:
+        st.markdown(
+            "**综合积分（用于排序）**  \\
+            ≥75：优先研究  \\
+            65–74：值得关注  \\
+            55–64：中性观察  \\
+            45–54：谨慎  \\
+            ＜45：暂不优先"
+        )
+        st.caption("综合积分由基本面、成长、估值、质量、周期、股东回报加权，并按风险扣分；60 分已高于中性水平。")
+    with confidence_rule:
+        st.markdown(
+            "**数据置信度（用于判断分数是否可靠）**  \\
+            ≥80/100：数据可靠  \\
+            60–79/100：可用，建议结合详情判断  \\
+            40–59/100：数据不完整，谨慎参考  \\
+            ＜40/100：数据不足，不作为重点决策依据"
+        )
+        st.caption("置信度不是上涨概率；它衡量行情新鲜度、财报与估值数据完整度。ETF 不以缺少公司财报作为低置信度理由。")
+
 last_failures = st.session_state.get("last_score_refresh_failures", [])
 if last_failures:
     with st.expander(f"⚠️ 上次刷新有 {len(last_failures)} 个标的未完成评分", expanded=True):
@@ -87,7 +109,7 @@ for rank, row in enumerate(rows, start=1):
     risk_score = row["risk_score"]
     columns[4].write(f"{risk_score:.1f}" if risk_score is not None else "—")
     confidence = row["confidence_score"]
-    columns[5].write(f"{confidence:.0%}" if confidence is not None else "—")
+    columns[5].write(f"{confidence:.0f}/100" if confidence is not None else "—")
     columns[6].write(str(row["as_of_date"] or "—"))
 
     security_id = row["security_id"]
