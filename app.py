@@ -32,7 +32,7 @@ tab_search, tab_library = st.tabs(["🔍 搜索", "🗂️ 研究标的库"])
 with tab_search:
     st.subheader("搜索股票")
     c1, c2 = st.columns([3, 1])
-    query = c1.text_input("代码 / 简称", placeholder="如 600036、600036.SH、招商银行")
+    query = c1.text_input("代码 / 简称", placeholder="如 600036、600036.SS、sh600036、招商银行")
     do_search = c2.button("搜索", type="primary")
     if (do_search or query) and query.strip():
         hits = svc.search_securities(engine, query)
