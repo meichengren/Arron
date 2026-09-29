@@ -7,6 +7,7 @@ testable and the UI only renders what these services return.
 from __future__ import annotations
 
 import json
+import time
 from datetime import date
 from typing import Any
 
@@ -182,31 +183,50 @@ def ranked_research_rows(engine: Engine) -> list[dict[str, Any]]:
 
 
 def refresh_daily_research_scores(
-    engine: Engine, as_of: date | None = None, sync_data: bool = False
+    engine: Engine,
+    as_of: date | None = None,
+    sync_data: bool = False,
+    only_pending: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
-    """Score stored data quickly, or force a fresh source sync before scoring."""
+    """Score stored data or synchronize it, optionally restricting work to pending rows."""
     target_date = as_of or date.today()
     scorer = ResearchScorer(engine)
     succeeded: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
-    for row in library_rows(engine):
-        try:
-            if sync_data or row["research_score"] is None:
-                result = add_security_and_research(
-                    engine, row["symbol"], target_date, force_sync=sync_data
+    rows = library_rows(engine)
+    if only_pending:
+        rows = [row for row in rows if row["research_score"] is None]
+
+    for index, row in enumerate(rows):
+        attempts = 3 if sync_data else 1
+        last_error: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                if sync_data or row["research_score"] is None:
+                    result = add_security_and_research(
+                        engine, row["symbol"], target_date, force_sync=sync_data
+                    )
+                    score = result["research_score"]
+                else:
+                    result = scorer.score_security(
+                        row["security_id"], row["symbol"], row["name"],
+                        row["industry_model"], target_date, persist=True,
+                    )
+                    score = result.research_score
+                succeeded.append(
+                    {"security_id": row["security_id"], "symbol": row["symbol"], "research_score": score}
                 )
-                score = result["research_score"]
-            else:
-                result = scorer.score_security(
-                    row["security_id"], row["symbol"], row["name"],
-                    row["industry_model"], target_date, persist=True,
-                )
-                score = result.research_score
-            succeeded.append(
-                {"security_id": row["security_id"], "symbol": row["symbol"], "research_score": score}
-            )
-        except Exception as exc:  # noqa: BLE001 - keep other symbols available
-            failed.append({"symbol": row["symbol"], "error": str(exc)})
+                last_error = None
+                break
+            except Exception as exc:  # noqa: BLE001 - preserve the final source error
+                last_error = exc
+                if attempt < attempts - 1:
+                    time.sleep(1.0 * (attempt + 1))
+        if last_error is not None:
+            failed.append({"symbol": row["symbol"], "error": str(last_error)})
+        if sync_data and index < len(rows) - 1:
+            time.sleep(0.35)
+
     return {"succeeded": succeeded, "failed": failed}
 
 def delete_security(engine: Engine, security_id: int) -> bool:
