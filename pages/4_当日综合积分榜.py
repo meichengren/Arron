@@ -24,6 +24,12 @@ def _engine():
 engine = _engine()
 imported_default_count = svc.seed_default_watchlist(engine)
 
+
+@st.cache_data(ttl=30, show_spinner=False)
+def _ranked_rows():
+    return svc.ranked_research_rows(engine)
+
+
 st.title("🏆 当日综合积分榜")
 st.caption("默认自选池已包含 27 个截图标的。刷新后会生成当日研究评分，并按综合积分从高到低排列。")
 if imported_default_count:
@@ -46,9 +52,10 @@ if refresh:
         if result["failed"]:
             st.warning(f"{len(result['failed'])} 个标的未能更新：")
             st.dataframe(result["failed"], use_container_width=True, hide_index=True)
+        _ranked_rows.clear()
         st.rerun()
 
-rows = svc.ranked_research_rows(engine)
+rows = _ranked_rows()
 if not rows:
     st.info("尚未添加标的。请先前往“添加标的”完成查询与同步。")
     st.stop()
@@ -82,6 +89,7 @@ for rank, row in enumerate(rows, start=1):
                 else:
                     st.info("该标的已被删除。")
                 st.session_state.pop(confirm_key, None)
+                _ranked_rows.clear()
                 st.rerun()
         if cancel.button("取消", key=f"cancel_delete_{security_id}"):
             st.session_state.pop(confirm_key, None)
