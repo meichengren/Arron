@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -20,38 +21,102 @@ INDUSTRY_MODELS = {
     "CONSUMER",
     "MANUFACTURING",
     "RESOURCES",
-    "GENERIC",
+ @dataclass(frozen=True)
+class AShareSymbol:
+    """Canonical identifiers for one supported A-share security."""
+
+    code: str
+    exchange: str
+    canonical: str
+    yfinance: str
+
+
+_EXCHANGE_ALIASES = {
+    "SH": "SH",
+    "SS": "SH",
+    "SSE": "SH",
+    "SHSE": "SH",
+    "XSHG": "SH",
+    "SZ": "SZ",
+    "SZSE": "SZ",
+    "XSHE": "SZ",
+    "BJ": "BJ",
+    "BSE": "BJ",
 }
-GENERIC_MODEL = "GENERIC"
+_CODE_PREFIXES = {
+    "SH": ("600", "601", "603", "605", "688", "900"),
+    "SZ": ("000", "001", "002", "003", "300", "301"),
+    "BJ": ("4", "8"),
+}
+
+
+def _contains_chinese(value: str) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", value))
+
+
+def _inferred_exchange(code: str) -> str:
+    for exchange, prefixes in _CODE_PREFIXES.items():
+        if code.startswith(prefixes):
+            return exchange
+    raise ValueError(f"暂不支持该证券代码: {code}")
+
+
+def normalize_a_share_symbol(
+    raw: str,
+    *,
+    lookup_by_name: Callable[[str], str | None] | None = None,
+) -> AShareSymbol:
+    """Normalize code, exchange and vendor formats for a supported A-share."""
+    original = str(raw).strip()
+    if not original:
+        raise ValueError("请输入股票代码或中文股票名称")
+
+    if _contains_chinese(original):
+        if lookup_by_name is None:
+            raise ValueError(f"无法解析中文股票名称: {original}")
+        resolved = lookup_by_name(original)
+        if not resolved:
+            raise ValueError(f"未找到股票名称: {original}")
+        return normalize_a_share_symbol(resolved)
+
+    token = (
+        original.upper()
+        .replace("。", ".")
+        .replace("_", "")
+        .replace("-", "")
+        .replace(" ", "")
+    )
+    prefix_match = re.fullmatch(r"(SH|SS|SSE|SHSE|SZ|SZSE|BJ|BSE)(\d{6})", token)
+    suffix_match = re.fullmatch(r"(\d{6})\.(SH|SS|SSE|SHSE|XSHG|SZ|SZSE|XSHE|BJ|BSE)", token)
+    bare_match = re.fullmatch(r"\d{6}", token)
+
+    if prefix_match:
+        exchange = _EXCHANGE_ALIASES[prefix_match.group(1)]
+        code = prefix_match.group(2)
+    elif suffix_match:
+        code = suffix_match.group(1)
+        exchange = _EXCHANGE_ALIASES[suffix_match.group(2)]
+    elif bare_match:
+        code = token
+        exchange = _inferred_exchange(code)
+    else:
+        raise ValueError(f"无法识别股票代码: {original}")
+
+    inferred = _inferred_exchange(code)
+    if exchange != inferred:
+        raise ValueError(f"代码 {code} 不属于 {exchange} 交易所")
+
+    return AShareSymbol(
+        code=code,
+        exchange=exchange,
+        canonical=f"{code}.{exchange}",
+        yfinance=f"{code}.SS" if exchange == "SH" else f"{code}.{exchange}",
+    )
 
 
 def normalize_symbol(raw: str) -> str:
-    """Normalize user input to canonical '600036.SH' form.
-
-    Accepts: '600036', '600036.SH', 'sh600036', 'SZ000001', '000001.SZ', '300750'.
-    """
-    token = raw.strip().upper()
-    if not token:
-        raise ValueError("empty symbol")
-    # strip exchange prefix like SH600036 / SZ000001
-    m = re.match(r"^(SH|SZ|BJ)(\d{6})$", token)
-    if m:
-        return f"{m.group(2)}.{m.group(1)}"
-    m = re.match(r"^(\d{6})(\.(SH|SZ|BJ))?$", token)
-    if not m:
-        raise ValueError(f"invalid symbol format: {raw!r}")
-    code = m.group(1)
-    suffix = m.group(3)
-    if suffix:
-        return f"{code}.{suffix}"
-    # infer exchange from code prefix
-    if code.startswith(("6", "9")):
-        return f"{code}.SH"
-    if code.startswith(("0", "2", "3")):
-        return f"{code}.SZ"
-    if code.startswith(("4", "8")):
-        return f"{code}.BJ"
-    raise ValueError(f"cannot infer exchange for: {raw!r}")
+    """Backward-compatible canonical symbol helper for existing callers."""
+    return normalize_a_share_symbol(raw).canonicalrror(f"cannot infer exchange for: {raw!r}")
 
 
 class IndustryRouter:
