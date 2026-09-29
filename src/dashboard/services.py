@@ -184,32 +184,25 @@ def ranked_research_rows(engine: Engine) -> list[dict[str, Any]]:
 def refresh_daily_research_scores(
     engine: Engine, as_of: date | None = None
 ) -> dict[str, list[dict[str, Any]]]:
-    """Recalculate today's composite score for every stored security."""
+    """Synchronize and recalculate today's score for every stored security."""
     target_date = as_of or date.today()
-    scorer = ResearchScorer(engine)
     succeeded: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
     for row in library_rows(engine):
         try:
-            result = scorer.score_security(
-                row["security_id"],
-                row["symbol"],
-                row["name"],
-                row["industry_model"],
-                target_date,
-                persist=True,
-            )
+            # add_security_and_research is idempotent for an existing symbol.
+            # MarketSyncService only fetches dates missing from the database.
+            result = add_security_and_research(engine, row["symbol"], target_date)
             succeeded.append(
                 {
                     "security_id": row["security_id"],
                     "symbol": row["symbol"],
-                    "research_score": result.research_score,
+                    "research_score": result["research_score"],
                 }
             )
         except Exception as exc:  # noqa: BLE001 - continue refreshing other securities
             failed.append({"symbol": row["symbol"], "error": str(exc)})
     return {"succeeded": succeeded, "failed": failed}
-
 
 def delete_security(engine: Engine, security_id: int) -> bool:
     """Delete one security and all rows linked through its database foreign keys."""
