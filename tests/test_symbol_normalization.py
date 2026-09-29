@@ -51,3 +51,21 @@ def test_akshare_name_lookup_returns_a_unique_stock_code(monkeypatch):
     )
 
     assert provider.lookup_symbol_by_name(" 招商银行 ") == "600036"
+
+
+from src.ingestion.security_sync import normalize_cn_symbol
+
+
+@pytest.mark.parametrize(
+    ("raw", "canonical"),
+    [("510300", "510300.SH"), ("159915.ETF", "159915.SZ"), ("SH510300", "510300.SH")],
+)
+def test_normalize_cn_symbol_accepts_domestic_etf_inputs(raw, canonical):
+    symbol = normalize_cn_symbol(raw)
+    assert symbol.asset_type == "ETF"
+    assert symbol.canonical == canonical
+
+
+def test_normalize_cn_symbol_rejects_etf_with_wrong_exchange():
+    with pytest.raises(ValueError, match="不属于"):
+        normalize_cn_symbol("510300.SZ")
