@@ -22,9 +22,12 @@ def _engine():
 
 
 engine = _engine()
+imported_default_count = svc.seed_default_watchlist(engine)
 
 st.title("🏆 当日综合积分榜")
-st.caption("对已添加标的执行当日研究评分，并按综合积分从高到低排列。")
+st.caption("默认自选池已包含 27 个截图标的。刷新后会生成当日研究评分，并按综合积分从高到低排列。")
+if imported_default_count:
+    st.info(f"已导入 {imported_default_count} 个默认标的；点击“刷新当日积分”即可拉取数据并生成排名。")
 
 left, right = st.columns([1, 4])
 with left:
