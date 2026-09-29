@@ -140,6 +140,7 @@ def library_rows(engine: Engine) -> list[dict[str, Any]]:
             "display": sec.display_symbol,
             "name": sec.name,
             "industry_model": sec.industry_model,
+            "asset_type": "ETF" if sec.market == "CN_ETF" else "A股",
             "research_score": None,
             "risk_score": None,
             "confidence_score": None,
