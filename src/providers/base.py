@@ -39,6 +39,10 @@ class DataProvider(ABC):
         or None when the security is not found.
         """
 
+    def lookup_symbol_by_name(self, name: str) -> str | None:
+        """Return a six-digit A-share code for an exact Chinese name, if known."""
+        return None
+
     # ------------------------------------------------------------------ #
     # Daily market data
     # ------------------------------------------------------------------ #
