@@ -155,8 +155,16 @@ class SecuritySyncService:
         self._repo = SecurityRepository(engine)
         self._industry = industry_router or IndustryRouter()
 
+    def _lookup_symbol_by_name(self, name: str) -> str | None:
+        code, _source = self._router.lookup_symbol_by_name(name)
+        return code
+
     def sync(self, raw_symbol: str) -> SecurityResult:
-        symbol = normalize_symbol(raw_symbol)
+        normalized = normalize_a_share_symbol(
+            raw_symbol,
+            lookup_by_name=self._lookup_symbol_by_name,
+        )
+        symbol = normalized.canonical
         basic, source = self._router.get_stock_basic(symbol)
         if basic is None:
             raise ValueError(f"security not found: {symbol}")
