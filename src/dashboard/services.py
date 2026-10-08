@@ -596,9 +596,27 @@ def add_security_and_research(
     mkt_res = mkt_svc.sync(
         sec.id, sec.symbol, years=settings.yaml_config.sync.market_history_years, force=force_sync
     )
-    fin_res = fin_svc.sync(
-        sec.id, sec.symbol, years=settings.yaml_config.sync.financial_history_years, force=force_sync
-    )
+    # Market data is required to score. Financial reports improve completeness,
+    # but a temporary free-source failure must not leave an otherwise tradable
+    # security permanently unscored. The resulting snapshot will carry a low
+    # data-confidence score until reports can be synchronized successfully.
+    try:
+        fin_res = fin_svc.sync(
+            sec.id,
+            sec.symbol,
+            years=settings.yaml_config.sync.financial_history_years,
+            force=force_sync,
+        )
+    except Exception as exc:  # noqa: BLE001 - preserve scoring availability
+        from src.ingestion.financial_sync import FinancialSyncResult
+
+        fin_res = FinancialSyncResult(
+            security_id=sec.id,
+            symbol=sec.symbol,
+            rows_upserted=0,
+            latest_report_period=None,
+            provider=f"unavailable: {type(exc).__name__}",
+        )
 
     scorer = ResearchScorer(engine)
     r = scorer.score_security(
