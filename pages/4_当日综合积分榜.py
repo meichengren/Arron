@@ -26,6 +26,14 @@ engine = _engine()
 imported_default_count = svc.seed_default_watchlist(engine)
 DASHBOARD_CACHE_SECONDS = get_settings().yaml_config.sync.dashboard_cache_seconds
 
+PRICE_STATE_LABELS = {
+    "DEEP_VALUE": "🟢 深度价值",
+    "ATTRACTIVE": "🟢 有吸引力",
+    "FAIR": "🟡 合理",
+    "EXPENSIVE": "🟠 偏贵",
+    "VERY_EXPENSIVE": "🔴 非常贵",
+}
+
 
 @st.cache_data(ttl=DASHBOARD_CACHE_SECONDS, show_spinner=False)
 def _ranked_rows():
@@ -60,6 +68,7 @@ with st.expander("📘 评分与数据置信度规则", expanded=True):
 | 40–59/100 | 数据不完整，谨慎参考 |
 | ＜40/100 | 数据不足，不作为重点决策依据 |""")
         st.caption("置信度不是上涨概率；它衡量行情新鲜度、财报与估值数据完整度。ETF 不以缺少公司财报作为低置信度理由。")
+    st.caption("价格状态：🟢 深度价值/有吸引力＝价格处在买入区间；🟡 合理＝接近估值中枢；🟠 偏贵、🔴 非常贵＝需结合详情谨慎判断。")
 
 last_failures = st.session_state.get("last_score_refresh_failures", [])
 if last_failures:
@@ -112,13 +121,13 @@ if not rows:
     st.info("尚未添加标的。请先前往“添加标的”完成查询与同步。")
     st.stop()
 
-st.caption(f"共 {len(rows)} 个标的；“查看”可打开研究详情，“删除”会移除该标的及其关联的研究和风险记录。")
-headers = st.columns([0.55, 2.0, 0.75, 1.35, 1.2, 1.2, 1.55, 1.8])
-for column, title in zip(headers, ["排名", "标的", "类型", "综合积分", "风险评分", "置信度", "最近评分", "操作"]):
+st.caption(f"共 {len(rows)} 个标的；价格状态基于当前价格与估值区间；“查看”可打开研究详情，“删除”会移除该标的及其关联的研究和风险记录。")
+headers = st.columns([0.5, 1.75, 0.65, 1.05, 1.0, 1.0, 1.2, 1.25, 1.45])
+for column, title in zip(headers, ["排名", "标的", "类型", "综合积分", "风险评分", "置信度", "价格状态", "最近评分", "操作"]):
     column.markdown(f"**{title}**")
 
 for rank, row in enumerate(rows, start=1):
-    columns = st.columns([0.55, 2.0, 0.75, 1.35, 1.2, 1.2, 1.55, 1.8])
+    columns = st.columns([0.5, 1.75, 0.65, 1.05, 1.0, 1.0, 1.2, 1.25, 1.45])
     columns[0].write(f"#{rank}")
     columns[1].write(f"{row['name']} · {row['symbol']}")
     columns[2].write(row["asset_type"])
@@ -128,13 +137,15 @@ for rank, row in enumerate(rows, start=1):
     columns[4].write(f"{risk_score:.1f}" if risk_score is not None else "—")
     confidence = row["confidence_score"]
     columns[5].write(f"{confidence:.0f}/100" if confidence is not None else "—")
-    columns[6].write(str(row["as_of_date"] or "—"))
+    state = row["price_state"]
+    columns[6].write(PRICE_STATE_LABELS.get(state, "—"))
+    columns[8].write(str(row["as_of_date"] or "—"))
 
     security_id = row["security_id"]
     confirm_key = f"confirm_delete_scoreboard_{security_id}"
     if st.session_state.get(confirm_key):
-        columns[7].warning("确认删除？")
-        confirm, cancel = columns[7].columns(2)
+        columns[8].warning("确认删除？")
+        confirm, cancel = columns[8].columns(2)
         if confirm.button("确认", key=f"delete_security_{security_id}", type="primary"):
             if admin_required(f"daily_scoreboard_delete_{security_id}"):
                 if svc.delete_security(engine, security_id):
@@ -148,7 +159,7 @@ for rank, row in enumerate(rows, start=1):
             st.session_state.pop(confirm_key, None)
             st.rerun()
     else:
-        detail, remove = columns[7].columns(2)
+        detail, remove = columns[8].columns(2)
         detail.page_link(
             "pages/1_Research_Detail.py",
             label="查看",
