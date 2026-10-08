@@ -161,6 +161,17 @@ class SecuritySyncService:
 
     def sync(self, raw_symbol: str) -> SecurityResult:
         normalized = normalize_cn_symbol(raw_symbol, lookup_by_name=self._lookup_symbol_by_name)
+        # Default watchlist entries already have a canonical code and display
+        # metadata. Reusing them avoids a blocking full-market basic-info call
+        # before the actual quote and financial synchronization begins.
+        existing = self._repo.get_by_symbol(normalized.canonical)
+        if existing is not None:
+            return SecurityResult(
+                security=existing,
+                provider="cache",
+                industry_model=existing.industry_model or GENERIC_MODEL,
+            )
+
         basic, source = self._router.get_stock_basic(normalized.canonical)
         if basic is None:
             raise ValueError(f"security not found: {normalized.canonical}")
